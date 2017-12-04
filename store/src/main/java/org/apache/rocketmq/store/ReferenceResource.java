@@ -42,7 +42,7 @@ public abstract class ReferenceResource {
     private volatile long firstShutdownTimestamp = 0;
 
     /**
-     * 拿到该资源
+     * 是否可以独占该资源，该方法作用是相当于一个非阻塞的锁，任何时候最多让一个线程占有该资源
      * 
      * @return
      */
