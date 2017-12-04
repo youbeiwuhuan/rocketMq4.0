@@ -28,18 +28,38 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sun.nio.ch.DirectBuffer;
 
+/**
+ * 用来缓存日志文件的缓存池
+ *
+ */
 public class TransientStorePool {
     private static final Logger log = LoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
+    /**
+     * 内存池大小
+     */
     private final int poolSize;
+    /**
+     * 日志文件大小
+     */
     private final int fileSize;
+    /**
+     * 可使用的buffer队列
+     */
     private final Deque<ByteBuffer> availableBuffers;
+    /**
+     * 消息存储配置信息
+     */
     private final MessageStoreConfig storeConfig;
 
     public TransientStorePool(final MessageStoreConfig storeConfig) {
         this.storeConfig = storeConfig;
         this.poolSize = storeConfig.getTransientStorePoolSize();
         this.fileSize = storeConfig.getMapedFileSizeCommitLog();
+        
+        /**
+         * 考虑并发性
+         */
         this.availableBuffers = new ConcurrentLinkedDeque<>();
     }
 
@@ -50,9 +70,13 @@ public class TransientStorePool {
         for (int i = 0; i < poolSize; i++) {
             ByteBuffer byteBuffer = ByteBuffer.allocateDirect(fileSize);
 
+            /**
+             * 调用本地代码锁定缓存页，不让操作系统将byteBuffer所占内存替换到交换分区
+             */
             final long address = ((DirectBuffer) byteBuffer).address();
             Pointer pointer = new Pointer(address);
             LibC.INSTANCE.mlock(pointer, new NativeLong(fileSize));
+            
 
             availableBuffers.offer(byteBuffer);
         }
@@ -60,6 +84,9 @@ public class TransientStorePool {
 
     public void destroy() {
         for (ByteBuffer byteBuffer : availableBuffers) {
+        	/**
+        	 * 解锁缓存页
+        	 */
             final long address = ((DirectBuffer) byteBuffer).address();
             Pointer pointer = new Pointer(address);
             LibC.INSTANCE.munlock(pointer, new NativeLong(fileSize));

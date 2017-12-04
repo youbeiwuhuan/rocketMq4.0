@@ -16,8 +16,6 @@
  */
 package org.apache.rocketmq.store;
 
-import com.sun.jna.NativeLong;
-import com.sun.jna.Pointer;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -31,12 +29,17 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+
 import org.apache.rocketmq.common.UtilAll;
 import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.store.config.FlushDiskType;
 import org.apache.rocketmq.store.util.LibC;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.sun.jna.NativeLong;
+import com.sun.jna.Pointer;
+
 import sun.nio.ch.DirectBuffer;
 
 /**
@@ -85,9 +88,13 @@ public class MappedFile extends ReferenceResource {
      */
     protected FileChannel fileChannel;
     /**
+     * 写缓存
      * Message will put to here first, and then reput to FileChannel if writeBuffer is not null.
      */
     protected ByteBuffer writeBuffer = null;
+    /**
+     * 缓存池
+     */
     protected TransientStorePool transientStorePool = null;
     /**
      * 映射的文件名
@@ -117,18 +124,36 @@ public class MappedFile extends ReferenceResource {
     public MappedFile() {
     }
 
+    /**
+     * 不带写缓存的对象构造器
+     * 
+     * @param fileName 文件名
+     * @param fileSize 文件大小
+     * 
+     * @throws IOException
+     */
     public MappedFile(final String fileName, final int fileSize) throws IOException {
         init(fileName, fileSize);
     }
 
-    public MappedFile(final String fileName, final int fileSize, final TransientStorePool transientStorePool) throws IOException {
+    /**
+     * 带写缓存的对象构造器
+     * 
+     * @param fileName 文件名
+     * @param fileSize 文件大小
+     * @param transientStorePool 缓存池
+     * 
+     * @throws IOException
+     */
+    public MappedFile(final String fileName, final int fileSize, 
+    		final TransientStorePool transientStorePool) throws IOException {
         init(fileName, fileSize, transientStorePool);
     }
 
     /**
      * 确认目录存在，不存在则创建一个
      * 
-     * @param dirName
+     * @param dirName 目录路径
      */
     public static void ensureDirOK(final String dirName) {
         if (dirName != null) {
@@ -140,18 +165,49 @@ public class MappedFile extends ReferenceResource {
         }
     }
 
+    
+    /*以下4个方法是解决MappedByteBuffer未提供unmap方法而不能立即释放映射内存问题,
+	    主要逻辑是调用 sun.misc.Cleaner的clean方法
+	*/
+    /**
+     * 释放映射内存;
+     * 参考FileChannelImpl的unmap方法来实现的，FileChannelImpl的unmap方法如下
+     * <pre>
+     * private static void unmap(MappedByteBuffer bb) {  
+		    Cleaner cl = ((DirectBuffer)bb).cleaner();  
+		    if (cl != null)  
+		        cl.clean();  
+		}  
+     * </pre>
+     * 实际两步：
+     * 1.调用DirectBuffer的cleaner()方法获取sun.misc.Cleaner对象()
+     * 2.调用sun.misc.Cleaner对象对象的clean()方法释放内存
+     * 
+     * 
+     * @param buffer 一定是DirectBuffer对象，否则啥都不做
+     * 
+     */
     public static void clean(final ByteBuffer buffer) {
-        if (buffer == null || !buffer.isDirect() || buffer.capacity() == 0)
+        if (buffer == null || !buffer.isDirect() || buffer.capacity() == 0)//判断是否DirectBuffer对象，不是则不释放
             return;
+        /**
+         * 同时实现ByteBuffer和DirectBuffer的只有DirectByteBuffer，
+         * 而MappedByteBuffer只有1个实现类DirectByteBuffer,所以只要代码走到这里，肯定是MappedByteBuffer对象
+         * 
+         * 
+         * 
+         * viewed(buffer)获取真实的buffer
+         * invoke(viewed(buffer), "cleaner")  获取ByteBuffer对应的Cleaner对象
+         */
         invoke(invoke(viewed(buffer), "cleaner"), "clean");
+        
     }
     
     
     
     
-
     /**
-     * 调用对象上的方法
+     * 跳过权限检查，调用对象上的方法
      * 
      * @param target 对象
      * @param methodName 方法名
@@ -160,7 +216,7 @@ public class MappedFile extends ReferenceResource {
      */
     private static Object invoke(final Object target, final String methodName, final Class<?>... args) {
         /**
-         * 调用sun.XXX.XXX包下的类的方法需要权限
+         * 调用sun.XXX.XXX包下的类的方法需要权限,跳过权限检查
          */
     	return AccessController.doPrivileged(new PrivilegedAction<Object>() {
             public Object run() {
@@ -195,14 +251,20 @@ public class MappedFile extends ReferenceResource {
     }
 
     /**
-     * 释放内存映射文件
+     * 找到关联这块内存的找到最底层的ByteBuffer对象
      * 
      * @param buffer
      * @return
      */
     private static ByteBuffer viewed(ByteBuffer buffer) {
+    	/**
+         * 对象有attachment方法（DirectByteBuffer有）则invoke调用attachment方法，没有则invoke调用viewedBuffer方法(这个我还没找到哪个类有此方法)，
+         * 一级级递归调用，直到invoke返回null,则找到最底层的关联对象
+         */
+    	
+    	
         String methodName = "viewedBuffer";
-
+        
         Method[] methods = buffer.getClass().getMethods();
         for (int i = 0; i < methods.length; i++) {
             if (methods[i].getName().equals("attachment")) {
@@ -217,6 +279,13 @@ public class MappedFile extends ReferenceResource {
         else
             return viewed(viewedBuffer);
     }
+    /*
+     * clean相关的4个方法结束
+     */
+    
+    
+    
+    
 
     public static int getTotalMappedFiles() {
         return TOTAL_MAPPED_FILES.get();
@@ -226,21 +295,26 @@ public class MappedFile extends ReferenceResource {
         return TOTAL_MAPPED_VIRTUAL_MEMORY.get();
     }
 
+    /**
+     * @param fileName 文件名称
+     * @param fileSize 文件大小
+     * @param transientStorePool 缓存池
+     * @throws IOException
+     */
     public void init(final String fileName, final int fileSize, final TransientStorePool transientStorePool) throws IOException {
         init(fileName, fileSize);
-        this.writeBuffer = transientStorePool.borrowBuffer();
+        this.writeBuffer = transientStorePool.borrowBuffer();//从缓冲池 取一块内存作写缓存
         this.transientStorePool = transientStorePool;
     }
 
     /**
      * 初始化映射文件
      * 
-     * 做了2件事：
+     * <p>做了3件事：
      * 1.获取文件在消息队列中偏移量
      * 2.确认文件父目录存在，不存在则创建一个
-     * 
-     * 3.
-     * 
+     * 3.创建文件映射
+     * </p>
      * 
      * @param fileName 文件名称
      * @param fileSize 文件大小
@@ -313,6 +387,8 @@ public class MappedFile extends ReferenceResource {
     public FileChannel getFileChannel() {
         return fileChannel;
     }
+    
+    
 
     /**
      * 提供给commitlog使用的，传入消息内容，然后CommitLog按照规定的格式构造二进制信息并顺序写
@@ -329,6 +405,9 @@ public class MappedFile extends ReferenceResource {
 
         //当前位置小于文件大小则可以尝试写入
         if (currentPos < this.fileSize) {
+        	/**
+        	 * 如果有 写缓存  则写入 写缓存
+        	 */
             ByteBuffer byteBuffer = writeBuffer != null ? writeBuffer.slice() : this.mappedByteBuffer.slice();
             byteBuffer.position(currentPos);
             
@@ -346,7 +425,7 @@ public class MappedFile extends ReferenceResource {
     }
 
     /**
-
+     * 文件偏移量 (文件中第一个消息在消息队列的偏移量)
      */
     public long getFileFromOffset() {
         return this.fileFromOffset;
@@ -381,7 +460,9 @@ public class MappedFile extends ReferenceResource {
     }
 
     /**
-     * @param flushLeastPages
+     * 刷盘
+     * 
+     * @param flushLeastPages 最小刷盘页数
      * @return The current flushed position
      */
     public int flush(final int flushLeastPages) {
@@ -714,7 +795,7 @@ public class MappedFile extends ReferenceResource {
         Pointer pointer = new Pointer(address);
         {
         	/**
-        	 * 这里的mappedByteBuffer是独占模式，所以直接mlock即可
+        	 * 这里没有其他进程来共享mappedByteBuffer，不用考虑copyOnWrite问题，所以直接mlock即可
         	 */
             int ret = LibC.INSTANCE.mlock(pointer, new NativeLong(this.fileSize));
             log.info("mlock {} {} {} ret = {} time consuming = {}", address, this.fileName, this.fileSize, ret, System.currentTimeMillis() - beginTime);
