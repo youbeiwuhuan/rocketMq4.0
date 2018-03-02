@@ -47,12 +47,35 @@ import org.slf4j.LoggerFactory;
 
 public class RouteInfoManager {
     private static final Logger log = LoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
+    
+    /**
+     * 心跳间隔 2分钟
+     */
     private final static long BROKER_CHANNEL_EXPIRED_TIME = 1000 * 60 * 2;
+    
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    
+    
+    /**
+     * topic队列表，存储了每个topic包含的队列数据
+     */
     private final HashMap<String/* topic */, List<QueueData>> topicQueueTable;
+    /**
+     * broker地址表
+     */
     private final HashMap<String/* brokerName */, BrokerData> brokerAddrTable;
+    
+    /**
+     * 集群主备信息表
+     */
     private final HashMap<String/* clusterName */, Set<String/* brokerName */>> clusterAddrTable;
+    /**
+     * broker存活状态信息表，其中的BrokerLiveInfo存储了broker的版本号，channel，和最近心跳时间等信息
+     */
     private final HashMap<String/* brokerAddr */, BrokerLiveInfo> brokerLiveTable;
+    /**
+     * 记录了每个broker的filter信息.
+     */
     private final HashMap<String/* brokerAddr */, List<String>/* Filter Server */> filterServerTable;
 
     public RouteInfoManager() {
@@ -739,7 +762,13 @@ public class RouteInfoManager {
 }
 
 class BrokerLiveInfo {
+    /**
+     * 最近心跳时间
+     */
     private long lastUpdateTimestamp;
+    /**
+     * 数据版本
+     */
     private DataVersion dataVersion;
     private Channel channel;
     private String haServerAddr;

@@ -26,6 +26,12 @@ import org.apache.commons.cli.ParseException;
 
 public class ServerUtil {
 
+    /**
+     * 创建CommandLine对象
+     * 
+     * @param options 参数对象
+     * @return
+     */
     public static Options buildCommandlineOptions(final Options options) {
         Option opt = new Option("h", "help", false, "Print help");
         opt.setRequired(false);
@@ -40,6 +46,13 @@ public class ServerUtil {
         return options;
     }
 
+    /**
+     * @param appName 命令名
+     * @param args 实际参数
+     * @param options 定义的参数选项
+     * @param parser 解析器
+     * @return
+     */
     public static CommandLine parseCmdLine(final String appName, String[] args, Options options,
         CommandLineParser parser) {
         HelpFormatter hf = new HelpFormatter();
@@ -58,12 +71,24 @@ public class ServerUtil {
         return commandLine;
     }
 
+    /**
+     * 打印参数说明
+     * 
+     * @param appName 命令名称
+     * @param options 参数选项
+     */
     public static void printCommandLineHelp(final String appName, final Options options) {
         HelpFormatter hf = new HelpFormatter();
         hf.setWidth(110);
         hf.printHelp(appName, options, true);
     }
 
+    /**
+     *将CommandLine对象转化为Properties对象
+     * 
+     * @param commandLine
+     * @return
+     */
     public static Properties commandLine2Properties(final CommandLine commandLine) {
         Properties properties = new Properties();
         Option[] opts = commandLine.getOptions();

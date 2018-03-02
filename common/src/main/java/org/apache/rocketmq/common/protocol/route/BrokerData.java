@@ -25,12 +25,18 @@ import java.util.Map;
 import org.apache.rocketmq.common.MixAll;
 
 public class BrokerData implements Comparable<BrokerData> {
+    /**
+     * 集群名称
+     */
     private String cluster;
+    /**
+     * broker名称
+     */
     private String brokerName;
     private HashMap<Long/* brokerId */, String/* broker address */> brokerAddrs;
 
     public String selectBrokerAddr() {
-        String value = this.brokerAddrs.get(MixAll.MASTER_ID);
+        String value = this.brokerAddrs.get(MixAll.MASTER_ID);//brokerId = 0 时是master broker
         if (null == value) {
             for (Map.Entry<Long, String> entry : this.brokerAddrs.entrySet()) {
                 return entry.getValue();
