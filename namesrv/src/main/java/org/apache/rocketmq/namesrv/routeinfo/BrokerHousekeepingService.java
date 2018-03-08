@@ -23,6 +23,12 @@ import org.apache.rocketmq.remoting.ChannelEventListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * 处理boker网络事件的服务，实际都委托给RouteInfoManager
+ * 
+ * @author fan79
+ *
+ */
 public class BrokerHousekeepingService implements ChannelEventListener {
     private static final Logger log = LoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
     private final NamesrvController namesrvController;

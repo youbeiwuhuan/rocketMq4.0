@@ -38,6 +38,12 @@ import org.apache.rocketmq.srvutil.ServerUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * nameserver启动类
+ * 
+ * @author fan79
+ *
+ */
 public class NamesrvStartup {
     public static Properties properties = null;
     public static CommandLine commandLine = null;
@@ -72,6 +78,8 @@ public class NamesrvStartup {
             final NamesrvConfig namesrvConfig = new NamesrvConfig();
             final NettyServerConfig nettyServerConfig = new NettyServerConfig();
             nettyServerConfig.setListenPort(9876);
+            
+            //加载配置文件，-c 指定配置文件的位置
             if (commandLine.hasOption('c')) {
                 String file = commandLine.getOptionValue('c');
                 if (file != null) {
@@ -88,6 +96,7 @@ public class NamesrvStartup {
                 }
             }
 
+            //含有 -p参数则退出
             if (commandLine.hasOption('p')) {
                 MixAll.printObjectProperties(null, namesrvConfig);
                 MixAll.printObjectProperties(null, nettyServerConfig);
@@ -112,6 +121,8 @@ public class NamesrvStartup {
             MixAll.printObjectProperties(log, namesrvConfig);
             MixAll.printObjectProperties(log, nettyServerConfig);
 
+            
+            
             final NamesrvController controller = new NamesrvController(namesrvConfig, nettyServerConfig);
 
             // remember all configs to prevent discard
@@ -123,6 +134,7 @@ public class NamesrvStartup {
                 System.exit(-3);
             }
 
+            //设置进程正常退出时执行的清理工作
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
                 private volatile boolean hasShutdown = false;
                 private AtomicInteger shutdownTimes = new AtomicInteger(0);

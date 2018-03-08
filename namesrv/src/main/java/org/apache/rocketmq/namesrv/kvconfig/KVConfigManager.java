@@ -168,6 +168,9 @@ public class KVConfigManager {
         return null;
     }
 
+    /**
+     * //周期性的输出到log中 kvconfig配置 
+     */
     public void printAllPeriodically() {
         try {
             this.lock.readLock().lockInterruptibly();

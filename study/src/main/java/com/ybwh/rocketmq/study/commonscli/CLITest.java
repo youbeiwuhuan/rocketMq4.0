@@ -39,6 +39,7 @@ public class CLITest {
 			System.out.println(cmd.getOptionValue("t"));
 			System.out.println(cmd.getOptionValue("e"));
 			
+			//自动生成帮助文档
 			HelpFormatter formatter = new HelpFormatter();
 			formatter.printHelp( "mytest", options,true );
 			

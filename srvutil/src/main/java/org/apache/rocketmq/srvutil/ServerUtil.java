@@ -24,6 +24,12 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
+/**
+ * 专门解析服务端命令行参数你的工具
+ * 
+ * @author fan79
+ *
+ */
 public class ServerUtil {
 
     /**

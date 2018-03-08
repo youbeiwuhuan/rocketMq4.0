@@ -35,6 +35,12 @@ import org.apache.rocketmq.remoting.netty.NettyServerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * NameServer控制类，管控NameServer的启动、初始化、停止等生命周期
+ * 
+ * @author fan79
+ *
+ */
 public class NamesrvController {
     private static final Logger log = LoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
 
@@ -79,14 +85,15 @@ public class NamesrvController {
 
         this.registerProcessor();
 
+        //定时扫描不活跃的Broker
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
-
             @Override
             public void run() {
                 NamesrvController.this.routeInfoManager.scanNotActiveBroker();
             }
         }, 5, 10, TimeUnit.SECONDS);
 
+        //周期性的输出到log中 kvconfig配置 
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -98,6 +105,9 @@ public class NamesrvController {
         return true;
     }
 
+    /**
+     * 注册进程
+     */
     private void registerProcessor() {
         if (namesrvConfig.isClusterTest()) {
 
