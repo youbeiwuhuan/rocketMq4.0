@@ -92,6 +92,11 @@ public class RemotingUtil {
         return isLinuxPlatform;
     }
 
+    /**
+     * 获取本地可用的外网地址
+     * 
+     * @return
+     */
     public static String getLocalAddress() {
         try {
             // Traversal Network interface to get the first non-loopback and non-private address
@@ -139,6 +144,11 @@ public class RemotingUtil {
         return null;
     }
 
+    /**
+     * InetAddress 转换为 字符串地址
+     * @param localHost
+     * @return
+     */
     public static String normalizeHostAddress(final InetAddress localHost) {
         if (localHost instanceof Inet6Address) {
             return "[" + localHost.getHostAddress() + "]";
@@ -147,12 +157,22 @@ public class RemotingUtil {
         }
     }
 
+    /**
+     * 字符串地址   转换为  SocketAddress
+     * @param addr
+     * @return
+     */
     public static SocketAddress string2SocketAddress(final String addr) {
         String[] s = addr.split(":");
         InetSocketAddress isa = new InetSocketAddress(s[0], Integer.parseInt(s[1]));
         return isa;
     }
 
+    /**
+     *    SocketAddress 转换为 字符串地址
+     * @param addr
+     * @return
+     */
     public static String socketAddress2String(final SocketAddress addr) {
         StringBuilder sb = new StringBuilder();
         InetSocketAddress inetSocketAddress = (InetSocketAddress) addr;
