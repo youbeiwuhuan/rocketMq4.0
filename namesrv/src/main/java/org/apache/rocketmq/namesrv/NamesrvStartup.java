@@ -79,7 +79,7 @@ public class NamesrvStartup {
             final NettyServerConfig nettyServerConfig = new NettyServerConfig();
             nettyServerConfig.setListenPort(9876);
             
-            //加载配置文件，-c 指定配置文件的位置
+            //加载配置文件，-c 指定配置文件的位置，加载到 NamesrvConfig和NettyServerConfig对象
             if (commandLine.hasOption('c')) {
                 String file = commandLine.getOptionValue('c');
                 if (file != null) {

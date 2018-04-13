@@ -25,6 +25,10 @@ import org.apache.rocketmq.remoting.exception.RemotingTooMuchRequestException;
 import org.apache.rocketmq.remoting.netty.NettyRequestProcessor;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
+/**
+ * 远程服务
+ *
+ */
 public interface RemotingServer extends RemotingService {
 
     void registerProcessor(final int requestCode, final NettyRequestProcessor processor,

@@ -29,6 +29,10 @@ import org.apache.rocketmq.namesrv.NamesrvController;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Key-Value 配置管理，属于某个NamesrvController
+ *
+ */
 public class KVConfigManager {
     private static final Logger log = LoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
 
@@ -46,6 +50,9 @@ public class KVConfigManager {
     }
 
     public void load() {
+    	/**
+    	 * 先从本地缓存文件恢复配置
+    	 */
         String content = MixAll.file2String(this.namesrvController.getNamesrvConfig().getKvConfigPath());
         if (content != null) {
             KVConfigSerializeWrapper kvConfigSerializeWrapper =
@@ -86,6 +93,9 @@ public class KVConfigManager {
         this.persist();
     }
 
+    /**
+     * 持久化配置信息
+     */
     public void persist() {
         try {
             this.lock.readLock().lockInterruptibly();

@@ -45,6 +45,10 @@ import org.apache.rocketmq.remoting.common.RemotingUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * 远程注册信息管理
+ *
+ */
 public class RouteInfoManager {
     private static final Logger log = LoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
     
@@ -122,6 +126,19 @@ public class RouteInfoManager {
         return topicList.encode();
     }
 
+    /**
+     * 注册broker节点
+     * 
+     * @param clusterName
+     * @param brokerAddr
+     * @param brokerName
+     * @param brokerId
+     * @param haServerAddr
+     * @param topicConfigWrapper
+     * @param filterServerList
+     * @param channel
+     * @return
+     */
     public RegisterBrokerResult registerBroker(
         final String clusterName,
         final String brokerAddr,
@@ -210,6 +227,11 @@ public class RouteInfoManager {
         return result;
     }
 
+    /**
+     * @param brokerAddr
+     * @param dataVersion
+     * @return
+     */
     private boolean isBrokerTopicConfigChanged(final String brokerAddr, final DataVersion dataVersion) {
         BrokerLiveInfo prev = this.brokerLiveTable.get(brokerAddr);
         if (null == prev || !prev.getDataVersion().equals(dataVersion)) {

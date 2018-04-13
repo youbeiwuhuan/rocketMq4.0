@@ -177,11 +177,23 @@ public class MixAll {
         }
     }
 
+    /**
+     * 读取文件的全部内容
+     * 
+     * @param fileName
+     * @return
+     */
     public static String file2String(final String fileName) {
         File file = new File(fileName);
         return file2String(file);
     }
 
+    /**
+     * 读取文件的全部内容
+     * 
+     * @param file
+     * @return
+     */
     public static String file2String(final File file) {
         if (file.exists()) {
             char[] data = new char[(int) file.length()];
