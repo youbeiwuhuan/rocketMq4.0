@@ -35,13 +35,11 @@ import org.slf4j.LoggerFactory;
  * 定义rocketmq通讯报文格式
  * 
  * <pre>
- * 报文的结构：
- * +------------------+-------------------+------------------+--------------------+
- * |    length        |   header length   |   header data    |         body       |
- * +------------------+-------------------+------------------+--------------------+
- * 
+ * 报文的结构,包含5个域,前4个域组成报文头,body存数据,如下
+ * +------------------+-------------------------+---------------------------+------------------+--------+
+ * |  length(4 byte)  | SerializeType(1 byte)   |   header length(3 byte)   |   header data    |  body  |
+ * +------------------+-------------------------+---------------------------+------------------+--------+
  * </pre>
- *
  */
 public class RemotingCommand {
 	public static final String SERIALIZE_TYPE_PROPERTY = "rocketmq.serialize.type";
@@ -115,6 +113,9 @@ public class RemotingCommand {
 	 * // 每个报文的唯一标志，request和response通过该字段匹配
 	 */
 	private int opaque = requestId.getAndIncrement();
+	/**
+	 * 区分是普通RPC({@link #RPC_TYPE})还是onewayRPC({@link #RPC_ONEWAY})的标志,默认是普通RPC
+	 */
 	private int flag = 0;
 	private String remark;
 	/**
@@ -239,7 +240,7 @@ public class RemotingCommand {
 	}
 
 	/**
-	 * 反序列化
+	 * 反序列化整个报文，参照{@link #encode()}
 	 * 
 	 * @param byteBuffer
 	 * @return
@@ -311,10 +312,21 @@ public class RemotingCommand {
 		return true;
 	}
 
+	/**
+	 * 
+	 * 
+	 * 创建 报文里 4个字节的  header length 域
+	 * 其实就是 将序列化类型和headerData长度 放到一个byte[4]数组中
+	 * 
+	 * 
+	 * @param source
+	 * @param type 
+	 * @return
+	 */
 	public static byte[] markProtocolType(int source, SerializeType type) {
 		byte[] result = new byte[4];
 
-		result[0] = type.getCode();
+		result[0] = type.getCode();//第一个字节存 序列化类型，后面3位存报文头长度，由此可见报文头不得超过2~24-1个字节
 		result[1] = (byte) ((source >> 16) & 0xFF);
 		result[2] = (byte) ((source >> 8) & 0xFF);
 		result[3] = (byte) (source & 0xFF);
@@ -324,8 +336,11 @@ public class RemotingCommand {
 //---------------------------以上全是静态方法，以下全是对象方法-------------------------------------------------------------------------
 	
 
-	public void markResponseType() {
-		int bits = 1 << RPC_TYPE;
+	/**
+	 * 标记为回应类型
+	 */
+	public void markResponseType() {//把flag改为 1
+		int bits = 1 << RPC_TYPE;//bits = 1
 		this.flag |= bits;
 	}
 
@@ -442,7 +457,7 @@ public class RemotingCommand {
 	}
 
 	/**
-	 * 序列化
+	 * 序列化整个报文
 	 * 
 	 * @return
 	 */
@@ -481,7 +496,7 @@ public class RemotingCommand {
 	}
 
 	/**
-	 * 消息头的序列化
+	 * 报文头的序列化
 	 * 
 	 * @return
 	 */
@@ -569,8 +584,11 @@ public class RemotingCommand {
 		return result;
 	}
 
-	public void markOnewayRPC() {
-		int bits = 1 << RPC_ONEWAY;
+	/**
+	 * 标记为单向消息
+	 */
+	public void markOnewayRPC() {//这里代理太冗余，直接赋值就行了
+		int bits = 1 << RPC_ONEWAY;// bits=0
 		this.flag |= bits;
 	}
 

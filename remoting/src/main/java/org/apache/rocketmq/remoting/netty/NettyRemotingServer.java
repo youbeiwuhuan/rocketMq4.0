@@ -157,11 +157,11 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                     public void initChannel(SocketChannel ch) throws Exception {
                         ch.pipeline().addLast(
                             defaultEventExecutorGroup,
-                            new NettyEncoder(),
-                            new NettyDecoder(),
-                            new IdleStateHandler(0, 0, nettyServerConfig.getServerChannelMaxIdleTimeSeconds()),
-                            new NettyConnetManageHandler(),
-                            new NettyServerHandler());
+                            new NettyEncoder(),//编码
+                            new NettyDecoder(),//解码
+                            new IdleStateHandler(0, 0, nettyServerConfig.getServerChannelMaxIdleTimeSeconds()),//心跳
+                            new NettyConnetManageHandler(),//连接管理
+                            new NettyServerHandler());//这里才是真正的业务处理
                     }
                 });
 

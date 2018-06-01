@@ -50,10 +50,19 @@ import org.slf4j.LoggerFactory;
 public abstract class NettyRemotingAbstract {
     private static final Logger PLOG = LoggerFactory.getLogger(RemotingHelper.ROCKETMQ_REMOTING);
 
+    /**
+     * 单向RPC信号量，控制线程个数
+     */
     protected final Semaphore semaphoreOneway;
 
+    /**
+     * 异步RPC信号量，控制线程个数
+     */
     protected final Semaphore semaphoreAsync;
 
+    /**
+     * 存放异步请求的ResponseFuture
+     */
     protected final ConcurrentHashMap<Integer /* opaque */, ResponseFuture> responseTable =
         new ConcurrentHashMap<Integer, ResponseFuture>(256);
 
@@ -61,6 +70,9 @@ public abstract class NettyRemotingAbstract {
         new HashMap<Integer, Pair<NettyRequestProcessor, ExecutorService>>(64);
     protected final NettyEventExecuter nettyEventExecuter = new NettyEventExecuter();
 
+    /**
+     * 默认的事件处理器，处理一些公共的消息
+     */
     protected Pair<NettyRequestProcessor, ExecutorService> defaultRequestProcessor;
 
     public NettyRemotingAbstract(final int permitsOneway, final int permitsAsync) {
@@ -74,6 +86,13 @@ public abstract class NettyRemotingAbstract {
         this.nettyEventExecuter.putNettyEvent(event);
     }
 
+    /**
+     * 处理接收到的消息
+     * 
+     * @param ctx
+     * @param msg
+     * @throws Exception
+     */
     public void processMessageReceived(ChannelHandlerContext ctx, RemotingCommand msg) throws Exception {
         final RemotingCommand cmd = msg;
         if (cmd != null) {
@@ -90,6 +109,12 @@ public abstract class NettyRemotingAbstract {
         }
     }
 
+    /**
+     * 处理请求消息
+     * 
+     * @param ctx
+     * @param cmd
+     */
     public void processRequestCommand(final ChannelHandlerContext ctx, final RemotingCommand cmd) {
         final Pair<NettyRequestProcessor, ExecutorService> matched = this.processorTable.get(cmd.getCode());
         final Pair<NettyRequestProcessor, ExecutorService> pair = null == matched ? this.defaultRequestProcessor : matched;
@@ -178,6 +203,13 @@ public abstract class NettyRemotingAbstract {
         }
     }
 
+    /**
+     * 处理回应消息
+     * 
+     * 
+     * @param ctx
+     * @param cmd
+     */
     public void processResponseCommand(ChannelHandlerContext ctx, RemotingCommand cmd) {
         final int opaque = cmd.getOpaque();
         final ResponseFuture responseFuture = responseTable.get(opaque);
