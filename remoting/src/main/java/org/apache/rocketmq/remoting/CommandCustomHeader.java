@@ -19,5 +19,10 @@ package org.apache.rocketmq.remoting;
 import org.apache.rocketmq.remoting.exception.RemotingCommandException;
 
 public interface CommandCustomHeader {
+    /**
+     * 检查实现类的属性值是否符合该类型，不符合则抛出RemotingCommandException
+     * 
+     * @throws RemotingCommandException
+     */
     void checkFields() throws RemotingCommandException;
 }
