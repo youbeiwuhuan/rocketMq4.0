@@ -97,6 +97,20 @@ public class BrokerOuterAPI {
         this.remotingClient.updateNameServerAddressList(lst);
     }
 
+    /**
+     * 向所有的nameServer注册broker信息
+     * 
+     * @param clusterName
+     * @param brokerAddr
+     * @param brokerName
+     * @param brokerId
+     * @param haServerAddr
+     * @param topicConfigWrapper
+     * @param filterServerList
+     * @param oneway
+     * @param timeoutMills
+     * @return
+     */
     public RegisterBrokerResult registerBrokerAll(
         final String clusterName,
         final String brokerAddr,
@@ -110,6 +124,9 @@ public class BrokerOuterAPI {
         RegisterBrokerResult registerBrokerResult = null;
 
         List<String> nameServerAddressList = this.remotingClient.getNameServerAddressList();
+        /**
+         * 向所有nameServer发送注册请求，只要有一个回应则注册成功
+         */
         if (nameServerAddressList != null) {
             for (String namesrvAddr : nameServerAddressList) {
                 try {
@@ -129,6 +146,27 @@ public class BrokerOuterAPI {
         return registerBrokerResult;
     }
 
+    /**
+     * 注册broker
+     * 
+     * @param namesrvAddr
+     * @param clusterName
+     * @param brokerAddr
+     * @param brokerName
+     * @param brokerId
+     * @param haServerAddr
+     * @param topicConfigWrapper
+     * @param filterServerList
+     * @param oneway
+     * @param timeoutMills
+     * @return
+     * @throws RemotingCommandException
+     * @throws MQBrokerException
+     * @throws RemotingConnectException
+     * @throws RemotingSendRequestException
+     * @throws RemotingTimeoutException
+     * @throws InterruptedException
+     */
     private RegisterBrokerResult registerBroker(
         final String namesrvAddr,
         final String clusterName,
