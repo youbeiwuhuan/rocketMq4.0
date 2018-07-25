@@ -21,7 +21,16 @@ import org.apache.rocketmq.common.protocol.header.namesrv.RegisterBrokerRequestH
 import org.apache.rocketmq.remoting.common.RemotingHelper;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
+
 public class MQProtosHelper {
+    /**
+     * 改方法未使用
+     * 
+     * @param nsaddr
+     * @param brokerAddr
+     * @param timeoutMillis
+     * @return
+     */
     public static boolean registerBrokerToNameServer(final String nsaddr, final String brokerAddr,
         final long timeoutMillis) {
         RegisterBrokerRequestHeader requestHeader = new RegisterBrokerRequestHeader();

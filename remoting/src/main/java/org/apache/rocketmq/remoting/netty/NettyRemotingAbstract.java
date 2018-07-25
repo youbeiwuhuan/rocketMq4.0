@@ -51,12 +51,12 @@ public abstract class NettyRemotingAbstract {
 	private static final Logger PLOG = LoggerFactory.getLogger(RemotingHelper.ROCKETMQ_REMOTING);
 
 	/**
-	 * 单向RPC信号量，控制线程个数
+	 * 单向RPC信号量，控制并发请求个数
 	 */
 	protected final Semaphore semaphoreOneway;
 
 	/**
-	 * 异步RPC信号量，控制线程个数
+	 * 异步RPC信号量，控制并发请求个数
 	 */
 	protected final Semaphore semaphoreAsync;
 
