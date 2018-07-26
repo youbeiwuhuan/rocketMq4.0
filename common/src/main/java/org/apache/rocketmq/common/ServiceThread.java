@@ -23,7 +23,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 所有服务线程的父类
+ * RocketMq所有服务任务的父类，实际上是Thread包装类
+ * 实现了等待、唤醒、停止的逻辑
  *
  */
 public abstract class ServiceThread implements Runnable {
@@ -35,11 +36,11 @@ public abstract class ServiceThread implements Runnable {
      */
     protected final Thread thread;
     /**
-     * 等待点，用来唤醒线程
+     * 用来实现线程的等待和唤醒唤醒逻辑
      */
     protected final CountDownLatch2 waitPoint = new CountDownLatch2(1);
     /**
-     * 线程是否被唤醒
+     * 标识线程是被唤醒还是仍在等待
      */
     protected volatile AtomicBoolean hasNotified = new AtomicBoolean(false);
     /**
@@ -62,7 +63,9 @@ public abstract class ServiceThread implements Runnable {
     }
 
     /**
-     * @param interrupt 是否被中断
+     * 停止服务执行,释放资源
+     * 
+     * @param interrupt 是否被中断工作线程
      */
     public void shutdown(final boolean interrupt) {
         this.stopped = true;
@@ -74,11 +77,11 @@ public abstract class ServiceThread implements Runnable {
 
         try {
             if (interrupt) {
-                this.thread.interrupt();
+                this.thread.interrupt();//中断waitPoint.await()
             }
 
             long beginTime = System.currentTimeMillis();
-            if (!this.thread.isDaemon()) {
+            if (!this.thread.isDaemon()) {//如果工作线程是守护线程，则等待工作线程执行完
                 this.thread.join(this.getJointime());
             }
             long eclipseTime = System.currentTimeMillis() - beginTime;
@@ -93,10 +96,19 @@ public abstract class ServiceThread implements Runnable {
         return JOIN_TIME;
     }
 
+    /**
+     * 打上停止的标记
+     */
     public void stop() {
         this.stop(false);
     }
 
+    /**
+     * 停止服务运行。interrupt为false只是打上停止的标记，
+     * ServiceThread所有的子类都在run方法里面调用isStopped判断实现停止逻辑.
+     * 
+     * @param interrupt  是否强行中断线程,强行中断可能导致run方法中流程执行一半终止
+     */
     public void stop(final boolean interrupt) {
         this.stopped = true;
         STLOG.info("stop thread " + this.getServiceName() + " interrupt " + interrupt);
@@ -110,23 +122,39 @@ public abstract class ServiceThread implements Runnable {
         }
     }
 
+    /**
+     * 打上停止的标记，ServiceThread所有的子类都在run方法里面调用isStopped判断实现停止逻辑.
+     */
     public void makeStop() {
         this.stopped = true;
         STLOG.info("makestop thread " + this.getServiceName());
     }
 
+    /**
+     * 唤醒等待，让该线程继续运行
+     */
     public void wakeup() {
         if (hasNotified.compareAndSet(false, true)) {
             waitPoint.countDown(); // notify
         }
     }
 
+    /**
+     * 等待一定时间后再运行,时间未到可以被wakeup唤醒
+     * 
+     * 
+     * @param interval
+     */
     protected void waitForRunning(long interval) {
-        if (hasNotified.compareAndSet(true, false)) {
+    	
+    	
+        if (hasNotified.compareAndSet(true, false)) {//设置为等待状态
+        	//等待逻辑还没开始就被wakeup唤醒的情况
             this.onWaitEnd();
             return;
         }
 
+        //以下是等待逻辑
         //entry to wait
         waitPoint.reset();
 
@@ -140,9 +168,18 @@ public abstract class ServiceThread implements Runnable {
         }
     }
 
+    /**
+     * 等待结束后要做的回调
+     */
     protected void onWaitEnd() {
     }
 
+    
+    /**
+     * 是否已被终止
+     * 
+     * @return
+     */
     public boolean isStopped() {
         return stopped;
     }
