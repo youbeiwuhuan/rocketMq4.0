@@ -1004,12 +1004,18 @@ public class CommitLog {
             }
         }
 
+        /**
+         * 
+         */
         private void swapRequests() {
             List<GroupCommitRequest> tmp = this.requestsWrite;
             this.requestsWrite = this.requestsRead;
             this.requestsRead = tmp;
         }
 
+        /**
+         * 刷盘逻辑
+         */
         private void doCommit() {
             if (!this.requestsRead.isEmpty()) {
                 for (GroupCommitRequest req : this.requestsRead) {
@@ -1043,6 +1049,7 @@ public class CommitLog {
         public void run() {
             CommitLog.log.info(this.getServiceName() + " service started");
 
+            //每隔10毫秒或该线程调用了wakeup()方法后停止阻塞
             while (!this.isStopped()) {
                 try {
                     this.waitForRunning(10);

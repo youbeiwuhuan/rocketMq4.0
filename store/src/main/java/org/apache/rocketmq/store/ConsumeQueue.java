@@ -23,6 +23,10 @@ import org.apache.rocketmq.common.constant.LoggerName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * 消费者逻辑队列，仅仅存储了CommitLog的位移而已
+ *
+ */
 public class ConsumeQueue {
 
     public static final int CQ_STORE_UNIT_SIZE = 20;
@@ -36,6 +40,9 @@ public class ConsumeQueue {
     private final int queueId;
     private final ByteBuffer byteBufferIndex;
 
+    /**
+     * 文件存储路劲
+     */
     private final String storePath;
     private final int mappedFileSize;
     private long maxPhysicOffset = -1;

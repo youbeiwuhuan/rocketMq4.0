@@ -29,10 +29,34 @@ import org.apache.rocketmq.common.constant.LoggerName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * 包含了很多MapedFile，以及每个MapedFile的真实大小
+ * 
+ * <pre>
+ *  
+ *                                 MappedFileQueue
+ *                                 mappedFileSize = 1024
+ * +-----------------------------------+-----------------------------------+-----------------------------------+
+ * |                                   |                                   |                                   |
+ * |           MapedFile               |           MapedFile               |           MapedFile               |
+ * |           queue index=0           |           queue index=1           |           queue index=2           |
+ * |                                   |                                   |                                   |
+ * +-----------------------------------+-----------------------------------+-----------------------------------+
+ *           ^                                  ^                                  ^
+ *           |                                  |                                  |
+ * fileName=00000000000000000000000     fileName=00000000000000000001024    fileName=00000000000000000002048
+ * fileFromOffset=0                     fileFromOffset=1024                 fileFromOffset=2048
+ * 
+ * 
+ * </pre>
+ */
 public class MappedFileQueue {
     private static final Logger log = LoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private static final Logger LOG_ERROR = LoggerFactory.getLogger(LoggerName.STORE_ERROR_LOGGER_NAME);
 
+    /**
+     * 每次触发删除文件，最多删除多少个文件
+     */
     private static final int DELETE_FILES_BATCH_MAX = 10;
 
     /**
@@ -41,25 +65,31 @@ public class MappedFileQueue {
     private final String storePath;
 
     /**
-     * 映射文件大小
+     * 每个映射文件大小
      */
     private final int mappedFileSize;
 
+    /**
+     * 各个文件
+     */
     private final CopyOnWriteArrayList<MappedFile> mappedFiles = new CopyOnWriteArrayList<MappedFile>();
 
+    /**
+     * 预分配MapedFile对象服务
+     */
     private final AllocateMappedFileService allocateMappedFileService;
 
     /**
-     * 刷盘地方
+     * 已刷盘的位置
      */
     private long flushedWhere = 0;
     /**
-     * 提交地方
+     * 已提交的位置
      */
     private long committedWhere = 0;
 
     /**
-     * 存储时间戳
+     * 最后一条消息存储时间
      */
     private volatile long storeTimestamp = 0;
 
@@ -455,6 +485,13 @@ public class MappedFileQueue {
         return result;
     }
 
+    /**
+     * 
+     * 将内存中的消息写入磁盘文件中
+     * 
+     * @param commitLeastPages 最小
+     * @return
+     */
     public boolean commit(final int commitLeastPages) {
         boolean result = true;
         MappedFile mappedFile = this.findMappedFileByOffset(this.committedWhere, false);

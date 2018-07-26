@@ -43,7 +43,9 @@ import com.sun.jna.Pointer;
 import sun.nio.ch.DirectBuffer;
 
 /**
- * 映射文件
+ * 包含了具体的文件信息，包括文件路径，文件名，文件起始偏移，写位移，读位移等等信息，同时使用了虚拟内存映射来提高IO效率；
+ * 
+ * 上层只有{@link org.apache.rocketmq.store.index.IndexFile} 和 {@link MappedFileQueue} 依赖此类
  *
  */
 public class MappedFile extends ReferenceResource {
@@ -64,25 +66,25 @@ public class MappedFile extends ReferenceResource {
     private static final AtomicInteger TOTAL_MAPPED_FILES = new AtomicInteger(0);
     
     
-    
-    
     /**
      * 当前写文件的位置，初始值0
      */
     protected final AtomicInteger wrotePosition = new AtomicInteger(0);
     //ADD BY ChenYang
     /**
-     * 提交位置，初始值0
+     * 当前提交位置，初始值0
      */
     protected final AtomicInteger committedPosition = new AtomicInteger(0);
     /**
-     * 刷盘位置，初始值0
+     * 当前刷盘位置，初始值0
      */
     private final AtomicInteger flushedPosition = new AtomicInteger(0);
     /**
      * 映射文件的大小
      */
     protected int fileSize;
+    
+    
     /**
      * 映射的fileChannel对象
      */
@@ -92,12 +94,13 @@ public class MappedFile extends ReferenceResource {
      * Message will put to here first, and then reput to FileChannel if writeBuffer is not null.
      */
     protected ByteBuffer writeBuffer = null;
+    
     /**
-     * 缓存池
+     * //池对象，init函数中赋值
      */
     protected TransientStorePool transientStorePool = null;
     /**
-     * 映射的文件名
+     * 映射的文件名，一般为20位数字,代表这个文件开始时的offset
      */
     private String fileName;
     /**
@@ -308,6 +311,9 @@ public class MappedFile extends ReferenceResource {
     }
 
     /**
+     * 
+     * 
+     * 
      * 初始化映射文件
      * 
      * <p>做了3件事：
@@ -335,6 +341,14 @@ public class MappedFile extends ReferenceResource {
         ensureDirOK(this.file.getParent());
 
         try {
+        	
+        	/*
+        	 * 初始化文件名，大小
+            * 设置fileFromOffset代表文件对应的偏移量
+            * 得到fileChannel，mappedByteBuffer 得到IO相关对象
+            * 计数TOTAL_MAPPED_VIRTUAL_MEMORY,TOTAL_MAPPED_FILES更新
+            * 
+            */
         	
             this.fileChannel = new RandomAccessFile(this.file, "rw").getChannel();
             this.mappedByteBuffer = this.fileChannel.map(MapMode.READ_WRITE, 0, fileSize);
@@ -460,7 +474,7 @@ public class MappedFile extends ReferenceResource {
     }
 
     /**
-     * 刷盘
+     * 刷盘 MappedFileQueue调用
      * 
      * @param flushLeastPages 最小刷盘页数
      * @return The current flushed position
@@ -498,6 +512,7 @@ public class MappedFile extends ReferenceResource {
 	 *	（2）检测内存中尚未刷盘的消息页数是否大于最小刷盘页数，不够页数也暂时不刷盘。 
 	 *	（3）MappedFile的父类是ReferenceResource，该父类作用是记录MappedFile中的引用次数，
 	 *		为正表示资源可用，刷盘前加一，然后将wrotePosotion的值赋给committedPosition，再减一。
+	 *  （4） 释放掉内存映射文件
      * 
      * @param commitLeastPages 提交的最少页数
      * @return 提交位置
@@ -601,7 +616,7 @@ public class MappedFile extends ReferenceResource {
     }
 
     /**
-     * 判断文件是否已写满
+     * 判断文件是否已写满,当前写入位置等于文件大小时写满
      * 
      * @return
      */
@@ -673,6 +688,7 @@ public class MappedFile extends ReferenceResource {
             return true;
         }
 
+        //关闭内存映射文件
         clean(this.mappedByteBuffer);
         TOTAL_MAPPED_VIRTUAL_MEMORY.addAndGet(this.fileSize * (-1));
         TOTAL_MAPPED_FILES.decrementAndGet();
