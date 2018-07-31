@@ -33,84 +33,101 @@ import sun.nio.ch.DirectBuffer;
  *
  */
 public class TransientStorePool {
-    private static final Logger log = LoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
+	private static final Logger log = LoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
-    /**
-     * 内存池大小
-     */
-    private final int poolSize;
-    /**
-     * 日志文件大小
-     */
-    private final int fileSize;
-    /**
-     * 可使用的buffer队列
-     */
-    private final Deque<ByteBuffer> availableBuffers;
-    /**
-     * 消息存储配置信息
-     */
-    private final MessageStoreConfig storeConfig;
+	/**
+	 * 内存池大小
+	 */
+	private final int poolSize;
+	/**
+	 * 日志文件大小
+	 */
+	private final int fileSize;
+	/**
+	 * 可使用的buffer队列
+	 */
+	private final Deque<ByteBuffer> availableBuffers;
+	/**
+	 * 消息存储配置信息
+	 */
+	private final MessageStoreConfig storeConfig;
 
-    public TransientStorePool(final MessageStoreConfig storeConfig) {
-        this.storeConfig = storeConfig;
-        this.poolSize = storeConfig.getTransientStorePoolSize();
-        this.fileSize = storeConfig.getMapedFileSizeCommitLog();
-        
-        /**
-         * 考虑并发性
-         */
-        this.availableBuffers = new ConcurrentLinkedDeque<>();
-    }
+	public TransientStorePool(final MessageStoreConfig storeConfig) {
+		this.storeConfig = storeConfig;
+		this.poolSize = storeConfig.getTransientStorePoolSize();
+		this.fileSize = storeConfig.getMapedFileSizeCommitLog();
 
-    /**
-     * It's a heavy init method.
-     */
-    public void init() {
-        for (int i = 0; i < poolSize; i++) {
-            ByteBuffer byteBuffer = ByteBuffer.allocateDirect(fileSize);
+		/**
+		 * 考虑并发性
+		 */
+		this.availableBuffers = new ConcurrentLinkedDeque<>();
+	}
 
-            /**
-             * 调用本地代码锁定缓存页，不让操作系统将byteBuffer所占内存替换到交换分区
-             */
-            final long address = ((DirectBuffer) byteBuffer).address();
-            Pointer pointer = new Pointer(address);
-            LibC.INSTANCE.mlock(pointer, new NativeLong(fileSize));
-            
+	/**
+	 * It's a heavy init method.
+	 */
+	public void init() {
+		for (int i = 0; i < poolSize; i++) {
+			ByteBuffer byteBuffer = ByteBuffer.allocateDirect(fileSize);
 
-            availableBuffers.offer(byteBuffer);
-        }
-    }
+			/**
+			 * 调用本地代码锁定缓存页，不让操作系统将byteBuffer所占内存替换到交换分区
+			 */
+			final long address = ((DirectBuffer) byteBuffer).address();
+			Pointer pointer = new Pointer(address);
+			LibC.INSTANCE.mlock(pointer, new NativeLong(fileSize));
 
-    public void destroy() {
-        for (ByteBuffer byteBuffer : availableBuffers) {
-        	/**
-        	 * 解锁缓存页
-        	 */
-            final long address = ((DirectBuffer) byteBuffer).address();
-            Pointer pointer = new Pointer(address);
-            LibC.INSTANCE.munlock(pointer, new NativeLong(fileSize));
-        }
-    }
+			availableBuffers.offer(byteBuffer);
+		}
+	}
 
-    public void returnBuffer(ByteBuffer byteBuffer) {
-        byteBuffer.position(0);
-        byteBuffer.limit(fileSize);
-        this.availableBuffers.offerFirst(byteBuffer);
-    }
+	/**
+	 * 销毁池
+	 */
+	public void destroy() {
+		for (ByteBuffer byteBuffer : availableBuffers) {
+			/**
+			 * 解锁缓存页
+			 */
+			final long address = ((DirectBuffer) byteBuffer).address();
+			Pointer pointer = new Pointer(address);
+			LibC.INSTANCE.munlock(pointer, new NativeLong(fileSize));
+		}
+	}
 
-    public ByteBuffer borrowBuffer() {
-        ByteBuffer buffer = availableBuffers.pollFirst();
-        if (availableBuffers.size() < poolSize * 0.4) {
-            log.warn("TransientStorePool only remain {} sheets.", availableBuffers.size());
-        }
-        return buffer;
-    }
+	/**
+	 * 归还使用的buffer
+	 * 
+	 * @param byteBuffer
+	 */
+	public void returnBuffer(ByteBuffer byteBuffer) {
+		byteBuffer.position(0);
+		byteBuffer.limit(fileSize);
+		this.availableBuffers.offerFirst(byteBuffer);
+	}
 
-    public int remainBufferNumbs() {
-        if (storeConfig.isTransientStorePoolEnable()) {
-            return availableBuffers.size();
-        }
-        return Integer.MAX_VALUE;
-    }
+	/**
+	 * 从池中借一个buffer
+	 * 
+	 * @return
+	 */
+	public ByteBuffer borrowBuffer() {
+		ByteBuffer buffer = availableBuffers.pollFirst();
+		if (availableBuffers.size() < poolSize * 0.4) {
+			log.warn("TransientStorePool only remain {} sheets.", availableBuffers.size());
+		}
+		return buffer;
+	}
+
+	/**
+	 * 剩余Buffer数量
+	 * 
+	 * @return
+	 */
+	public int remainBufferNumbs() {
+		if (storeConfig.isTransientStorePoolEnable()) {
+			return availableBuffers.size();
+		}
+		return Integer.MAX_VALUE;
+	}
 }

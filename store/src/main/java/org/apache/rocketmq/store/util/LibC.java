@@ -40,14 +40,20 @@ public interface LibC extends Library {
 	int MS_SYNC = 0x0004;
 
 	/**
-	 * 系统调用 mlock 家族允许程序在物理内存上锁住它的部分或全部地址空间。 这将阻止Linux 将这个内存页调度到交换空间（swap
-	 * space），即使 该程序已有一段时间没有访问这段空间。
+	 * 系统调用 mlock 家族允许程序在物理内存上锁住它的部分或全部地址空间。 这将阻止Linux 将这个内存页调度到交换空间（swap space），即使
+	 * 该程序已有一段时间没有访问这段空间。
 	 * <p>
 	 * 需注意的是，仅分配内存并调用 mlock
 	 * 并不会为调用进程锁定这些内存，因为对应的分页可能是写时复制（copy-on-write）的5。因此，你应该在每个页面中写入一个假的值：
-	 * size_t i; size_t page_size = getpagesize (); for (i = 0; i < alloc_size;
-	 * i += page_size) memory[i] = 0; 这样针对每个内存分页的写入操作会强制 Linux
-	 * 为当前进程分配一个独立、私有的内存页。
+	 * 
+	 * <pre>
+	 * size_t i;
+	 * size_t page_size = getpagesize();
+	 * for (i = 0; i < alloc_size; i += page_size)
+	 * 	memory[i] = 0;
+	 * </pre>
+	 * 
+	 * 这样针对每个内存分页的写入操作会强制 Linux 为当前进程分配一个独立、私有的内存页。
 	 * </p>
 	 * 
 	 * @param var1
