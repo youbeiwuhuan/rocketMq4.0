@@ -114,8 +114,11 @@ public class RemotingCommand {
 	 */
 	private int opaque = requestId.getAndIncrement();
 	/**
-	 * 区分是普通RPC({@link #RPC_TYPE})还是onewayRPC({@link #RPC_ONEWAY})的标志,默认是普通RPC
-	 */
+     * 只有最后两位有效
+     * 最后一位为1表示回应，为0表示请求
+     * 倒数第二位为1表示单向请求，为0表示需要回应的请求。
+     * flag只能有10,00,01三种情况
+     */
 	private int flag = 0;
 	private String remark;
 	/**

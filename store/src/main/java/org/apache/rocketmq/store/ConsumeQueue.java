@@ -24,7 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 消费者逻辑队列，仅仅存储了CommitLog的位移而已
+ * 作为消费消息的索引，保存了指定Topic下的队列消息在CommitLog中的起始物理偏移量offset，消息大小size和消息Tag的HashCode值
  *
  */
 public class ConsumeQueue {

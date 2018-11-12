@@ -46,6 +46,10 @@ import sun.nio.ch.DirectBuffer;
  * 包含了具体的文件信息，包括文件路径，文件名，文件起始偏移，写位移，读位移等等信息，同时使用了虚拟内存映射来提高IO效率；
  * 
  * 上层只有{@link org.apache.rocketmq.store.index.IndexFile} 和 {@link MappedFileQueue} 依赖此类
+ * 
+ * 该类既有FileChannel的写和刷盘，也有MappedByteBuffer的写和刷盘。
+ * 当申请到了写缓存（writeBuffer != null）,则用FileChannel,若没有申请到写缓存则用MappedByteBuffer
+ * 
  *
  */
 public class MappedFile extends ReferenceResource {
@@ -306,7 +310,7 @@ public class MappedFile extends ReferenceResource {
      */
     public void init(final String fileName, final int fileSize, final TransientStorePool transientStorePool) throws IOException {
         init(fileName, fileSize);
-        this.writeBuffer = transientStorePool.borrowBuffer();//从缓冲池 取一块内存作写缓存
+        this.writeBuffer = transientStorePool.borrowBuffer();//从缓冲池 取一块内存作写缓存，这里writeBuffer可能为空
         this.transientStorePool = transientStorePool;
     }
 
@@ -518,6 +522,7 @@ public class MappedFile extends ReferenceResource {
      * @return 提交位置
      */
     public int commit(final int commitLeastPages) {
+    	
         if (writeBuffer == null) {
             //no need to commit data to file channel, so just regard wrotePosition as committedPosition.
             return this.wrotePosition.get();

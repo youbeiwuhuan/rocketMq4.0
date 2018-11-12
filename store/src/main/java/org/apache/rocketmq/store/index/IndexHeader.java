@@ -21,8 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
-
- *
+ * IndexFile的头部结构
  *
  */
 public class IndexHeader {
