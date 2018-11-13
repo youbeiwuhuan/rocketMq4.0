@@ -29,6 +29,16 @@ import org.slf4j.LoggerFactory;
 
 /**
  * 为消息查询提供了一种通过key或时间区间来查询消息的方法
+ * <pre>
+ * 总体结构
+ * +-----------------+----------------------------------+------------------------------------+
+ * |     Header      |        slot table                |        index linked list           |
+ * +-----------------+----------------------------------+------------------------------------+
+ * |----- 40B -------|-------  4*500W  -----------------|---------- 20*2000W  ---------------|
+ * 
+ * Header 结构 {@link IndexHeader}
+ * 
+ * </pre>
  *
  */
 public class IndexFile {
@@ -39,8 +49,16 @@ public class IndexFile {
     private final int hashSlotNum;
     private final int indexNum;
     private final MappedFile mappedFile;
+    
+    /**
+     * 实际上是
+     */
     private final FileChannel fileChannel;
+    /**
+     * 实际上是mappedFile的mappedByteBuffer
+     */
     private final MappedByteBuffer mappedByteBuffer;
+    
     /**
      * 头部结构
      */

@@ -43,13 +43,14 @@ import com.sun.jna.Pointer;
 import sun.nio.ch.DirectBuffer;
 
 /**
- * 包含了具体的文件信息，包括文件路径，文件名，文件起始偏移，写位移，读位移等等信息，同时使用了虚拟内存映射来提高IO效率；
- * 
+ * <pre>
+ * MappedFile逻辑就是在FileChannel和MappedByteBuffer读写磁盘基础上进行封装，封装了刷盘逻辑。
  * 上层只有{@link org.apache.rocketmq.store.index.IndexFile} 和 {@link MappedFileQueue} 依赖此类
  * 
+ * 包含了具体的文件信息，包括文件路径，文件名，文件起始偏移，写位移，读位移等等信息，同时使用了虚拟内存映射来提高IO效率；
  * 该类既有FileChannel的写和刷盘，也有MappedByteBuffer的写和刷盘。
  * 当申请到了写缓存（writeBuffer != null）,则用FileChannel,若没有申请到写缓存则用MappedByteBuffer
- * 
+ * </pre>
  *
  */
 public class MappedFile extends ReferenceResource {

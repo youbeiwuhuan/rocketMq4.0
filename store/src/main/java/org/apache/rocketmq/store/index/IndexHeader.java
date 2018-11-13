@@ -21,30 +21,73 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * IndexFile的头部结构
+ * IndexHeader的逻辑是利用内存映射文件读取和更新6个字段
+ * 
+ *
+ * <pre>
+ * IndexFile的头部结构,参照代码{@link #load()}
+ *       8B              8B               8B             8B               4B              4B
+ * +----------------+--------------+----------------+--------------+---------------+--------------+
+ * | beginTimestamp | endTimestamp | beginPhyOffset | endPhyOffset | hashSlotCount | indexCount   |
+ * +----------------+--------------+----------------+--------------+---------------+--------------+
+ * </pre>
+ * 
  *
  */
 public class IndexHeader {
     public static final int INDEX_HEADER_SIZE = 40;
-    private static int beginTimestampIndex = 0;
-    private static int endTimestampIndex = 8;
-    private static int beginPhyoffsetIndex = 16;
-    private static int endPhyoffsetIndex = 24;
-    private static int hashSlotcountIndex = 32;
-    private static int indexCountIndex = 36;
+    /*------------------- 以下6个常量是对应字段在byteBuffer中的起始位置  -------------------*/
+    private static final int beginTimestampIndex = 0;
+    private static final int endTimestampIndex = 8;
+    private static final int beginPhyoffsetIndex = 16;
+    private static final int endPhyoffsetIndex = 24;
+    private static final int hashSlotcountIndex = 32;
+    private static final int indexCountIndex = 36;
+    
+    /**
+     * 真实的二进制数据
+     */
     private final ByteBuffer byteBuffer;
+    
+    
+    /**
+     * 索引文件构建第一个索引的消息落在broker的时间
+     */
     private AtomicLong beginTimestamp = new AtomicLong(0);
+    /**
+     * 索引文件构建最后一个索引消息落broker时间
+     */
     private AtomicLong endTimestamp = new AtomicLong(0);
+    /**
+     * 索引文件构建第一个索引的消息commitLog偏移量
+     */
     private AtomicLong beginPhyOffset = new AtomicLong(0);
+    /**
+     * 索引文件构建最后一个索引消息commitLog偏移量
+     */
     private AtomicLong endPhyOffset = new AtomicLong(0);
+    /**
+     * 构建索引占用的槽位数(这个值貌似没有具体作用)
+     */
     private AtomicInteger hashSlotCount = new AtomicInteger(0);
-
+    /**
+     * 索引文件中构建的索引个数
+     */
     private AtomicInteger indexCount = new AtomicInteger(1);
+    
+    
+    
 
+    /**
+     * @param byteBuffer 这里传入的byteBuffer实际上是IndexFile的byteBuffer前面40个字节的映射
+     */
     public IndexHeader(final ByteBuffer byteBuffer) {
         this.byteBuffer = byteBuffer;
     }
 
+    /**
+     * 从IndexHeader二进制数据中加载6个字段
+     */
     public void load() {
         this.beginTimestamp.set(byteBuffer.getLong(beginTimestampIndex));
         this.endTimestamp.set(byteBuffer.getLong(endTimestampIndex));
@@ -59,6 +102,9 @@ public class IndexHeader {
         }
     }
 
+    /**
+     * 更新6个字段到IndexHeader二进制数据
+     */
     public void updateByteBuffer() {
         this.byteBuffer.putLong(beginTimestampIndex, this.beginTimestamp.get());
         this.byteBuffer.putLong(endTimestampIndex, this.endTimestamp.get());
@@ -67,6 +113,9 @@ public class IndexHeader {
         this.byteBuffer.putInt(hashSlotcountIndex, this.hashSlotCount.get());
         this.byteBuffer.putInt(indexCountIndex, this.indexCount.get());
     }
+    
+    
+    /*------------------- 以下方法是6个字段的获取和更新方式  -------------------*/
 
     public long getBeginTimestamp() {
         return beginTimestamp.get();
