@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * 为消息查询提供了一种通过key或时间区间来查询消息的方法
+ * 
  * <pre>
  * 总体结构
  * +-----------------+----------------------------------+------------------------------------+
@@ -38,253 +39,325 @@ import org.slf4j.LoggerFactory;
  * 
  * Header 结构 {@link IndexHeader}
  * 
+ * 
+ * index linked list 中节点结构
+ *      4B                  8B                   4B                      4B
+ * +-----------------+------------------+-----------------------+---------------------+
+ * |   keyHash       |    phyOffset     |   timeDiff            |   slotValue         |
+ * +-----------------+------------------+-----------------------+---------------------+
+ *  keyHash: 4位，int值，key的hash值
+ *  phyOffset：8位，long值，索引消息commitLog偏移量
+ *  timeDiff: 4位，int值，索引存储的时间与IndexHeader的beginTimestamp时间差(这是为了节省空间)
+ *  slotValue:4位，int值，索引对应slot的上一条索引的下标(据此完成一条向老记录的链表)
  * </pre>
  *
  */
 public class IndexFile {
-    private static final Logger log = LoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
-    private static int hashSlotSize = 4;
-    private static int indexSize = 20;
-    private static int invalidIndex = 0;
-    private final int hashSlotNum;
-    private final int indexNum;
-    private final MappedFile mappedFile;
-    
-    /**
-     * 实际上是
-     */
-    private final FileChannel fileChannel;
-    /**
-     * 实际上是mappedFile的mappedByteBuffer
-     */
-    private final MappedByteBuffer mappedByteBuffer;
-    
-    /**
-     * 头部结构
-     */
-    private final IndexHeader indexHeader;
+	private static final Logger log = LoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
+	/**
+	 * 每一个槽信息含4字节，即该slot对应的count数
+	 */
+	private static final int hashSlotSize = 4;
+	/**
+	 * 每一个索引信息占据20字节
+	 */
+	private static final int indexSize = 20;
+	/**
+	 * invalidIndex是0表示无效索引下标
+	 */
+	private static final int invalidIndex = 0;
 
-    public IndexFile(final String fileName, final int hashSlotNum, final int indexNum,
-        final long endPhyOffset, final long endTimestamp) throws IOException {
-        int fileTotalSize =
-            IndexHeader.INDEX_HEADER_SIZE + (hashSlotNum * hashSlotSize) + (indexNum * indexSize);
-        this.mappedFile = new MappedFile(fileName, fileTotalSize);
-        this.fileChannel = this.mappedFile.getFileChannel();
-        this.mappedByteBuffer = this.mappedFile.getMappedByteBuffer();
-        this.hashSlotNum = hashSlotNum;
-        this.indexNum = indexNum;
+	/**
+	 * hash槽的个数，默认5百万
+	 */
+	private final int hashSlotNum;
+	/**
+	 * 最多记录的索引条数,默认2千万
+	 */
+	private final int indexNum;
 
-        ByteBuffer byteBuffer = this.mappedByteBuffer.slice();
-        this.indexHeader = new IndexHeader(byteBuffer);
+	private final MappedFile mappedFile;
 
-        if (endPhyOffset > 0) {
-            this.indexHeader.setBeginPhyOffset(endPhyOffset);
-            this.indexHeader.setEndPhyOffset(endPhyOffset);
-        }
+	/**
+	 * 实际上是mappedFile的fileChannel
+	 */
+	private final FileChannel fileChannel;
+	/**
+	 * 实际上是mappedFile的mappedByteBuffer,没有用到
+	 */
+	private final MappedByteBuffer mappedByteBuffer;
 
-        if (endTimestamp > 0) {
-            this.indexHeader.setBeginTimestamp(endTimestamp);
-            this.indexHeader.setEndTimestamp(endTimestamp);
-        }
-    }
+	/**
+	 * 头部结构
+	 */
+	private final IndexHeader indexHeader;
 
-    public String getFileName() {
-        return this.mappedFile.getFileName();
-    }
+	public IndexFile(final String fileName, final int hashSlotNum, final int indexNum, final long endPhyOffset,
+			final long endTimestamp) throws IOException {
+		int fileTotalSize = IndexHeader.INDEX_HEADER_SIZE + (hashSlotNum * hashSlotSize) + (indexNum * indexSize);
+		this.mappedFile = new MappedFile(fileName, fileTotalSize);
+		this.fileChannel = this.mappedFile.getFileChannel();
+		this.mappedByteBuffer = this.mappedFile.getMappedByteBuffer();
+		this.hashSlotNum = hashSlotNum;
+		this.indexNum = indexNum;
 
-    public void load() {
-        this.indexHeader.load();
-    }
+		ByteBuffer byteBuffer = this.mappedByteBuffer.slice();
+		this.indexHeader = new IndexHeader(byteBuffer);
 
-    public void flush() {
-        long beginTime = System.currentTimeMillis();
-        if (this.mappedFile.hold()) {
-            this.indexHeader.updateByteBuffer();
-            this.mappedByteBuffer.force();
-            this.mappedFile.release();
-            log.info("flush index file eclipse time(ms) " + (System.currentTimeMillis() - beginTime));
-        }
-    }
+		if (endPhyOffset > 0) {
+			this.indexHeader.setBeginPhyOffset(endPhyOffset);
+			this.indexHeader.setEndPhyOffset(endPhyOffset);
+		}
 
-    public boolean isWriteFull() {
-        return this.indexHeader.getIndexCount() >= this.indexNum;
-    }
+		if (endTimestamp > 0) {
+			this.indexHeader.setBeginTimestamp(endTimestamp);
+			this.indexHeader.setEndTimestamp(endTimestamp);
+		}
+	}
 
-    public boolean destroy(final long intervalForcibly) {
-        return this.mappedFile.destroy(intervalForcibly);
-    }
+	public String getFileName() {
+		return this.mappedFile.getFileName();
+	}
 
-    public boolean putKey(final String key, final long phyOffset, final long storeTimestamp) {
-        if (this.indexHeader.getIndexCount() < this.indexNum) {
-            int keyHash = indexKeyHashMethod(key);
-            int slotPos = keyHash % this.hashSlotNum;
-            int absSlotPos = IndexHeader.INDEX_HEADER_SIZE + slotPos * hashSlotSize;
+	public void load() {
+		this.indexHeader.load();
+	}
 
-            FileLock fileLock = null;
+	public void flush() {
+		long beginTime = System.currentTimeMillis();
+		if (this.mappedFile.hold()) {
+			this.indexHeader.updateByteBuffer();
+			this.mappedByteBuffer.force();
+			this.mappedFile.release();
+			log.info("flush index file eclipse time(ms) " + (System.currentTimeMillis() - beginTime));
+		}
+	}
 
-            try {
+	/**
+	 * 
+	 * 是否写满了，就是已经写的索引数是否超过了指定的索引数（2千万）
+	 * 
+	 * @return
+	 */
+	public boolean isWriteFull() {
+		return this.indexHeader.getIndexCount() >= this.indexNum;
+	}
 
-                // fileLock = this.fileChannel.lock(absSlotPos, hashSlotSize,
-                // false);
-                int slotValue = this.mappedByteBuffer.getInt(absSlotPos);
-                if (slotValue <= invalidIndex || slotValue > this.indexHeader.getIndexCount()) {
-                    slotValue = invalidIndex;
-                }
+	public boolean destroy(final long intervalForcibly) {
+		return this.mappedFile.destroy(intervalForcibly);
+	}
 
-                long timeDiff = storeTimestamp - this.indexHeader.getBeginTimestamp();
+	/**
+	 * 存放一条索引消息,更新IndexHeader，slotTable，Index Linked List三个记录
+	 * 
+	 * @param key
+	 *            topic-key值
+	 * @param phyOffset
+	 *            物理偏移
+	 * @param storeTimestamp
+	 *            时间戳
+	 * @return
+	 */
+	public boolean putKey(final String key, final long phyOffset, final long storeTimestamp) {
+		if (this.indexHeader.getIndexCount() < this.indexNum) {
+			int keyHash = indexKeyHashMethod(key);
+			int slotPos = keyHash % this.hashSlotNum;
+			int absSlotPos = IndexHeader.INDEX_HEADER_SIZE + slotPos * hashSlotSize;
 
-                timeDiff = timeDiff / 1000;
+			FileLock fileLock = null;
 
-                if (this.indexHeader.getBeginTimestamp() <= 0) {
-                    timeDiff = 0;
-                } else if (timeDiff > Integer.MAX_VALUE) {
-                    timeDiff = Integer.MAX_VALUE;
-                } else if (timeDiff < 0) {
-                    timeDiff = 0;
-                }
+			try {
 
-                int absIndexPos =
-                    IndexHeader.INDEX_HEADER_SIZE + this.hashSlotNum * hashSlotSize
-                        + this.indexHeader.getIndexCount() * indexSize;
+				// fileLock = this.fileChannel.lock(absSlotPos, hashSlotSize,
+				// false);
+				int slotValue = this.mappedByteBuffer.getInt(absSlotPos);
+				if (slotValue <= invalidIndex || slotValue > this.indexHeader.getIndexCount()) {
+					slotValue = invalidIndex;
+				}
 
-                this.mappedByteBuffer.putInt(absIndexPos, keyHash);
-                this.mappedByteBuffer.putLong(absIndexPos + 4, phyOffset);
-                this.mappedByteBuffer.putInt(absIndexPos + 4 + 8, (int) timeDiff);
-                this.mappedByteBuffer.putInt(absIndexPos + 4 + 8 + 4, slotValue);
+				long timeDiff = storeTimestamp - this.indexHeader.getBeginTimestamp();
 
-                this.mappedByteBuffer.putInt(absSlotPos, this.indexHeader.getIndexCount());
+				timeDiff = timeDiff / 1000;
 
-                if (this.indexHeader.getIndexCount() <= 1) {
-                    this.indexHeader.setBeginPhyOffset(phyOffset);
-                    this.indexHeader.setBeginTimestamp(storeTimestamp);
-                }
+				if (this.indexHeader.getBeginTimestamp() <= 0) {
+					timeDiff = 0;
+				} else if (timeDiff > Integer.MAX_VALUE) {
+					timeDiff = Integer.MAX_VALUE;
+				} else if (timeDiff < 0) {
+					timeDiff = 0;
+				}
 
-                this.indexHeader.incHashSlotCount();
-                this.indexHeader.incIndexCount();
-                this.indexHeader.setEndPhyOffset(phyOffset);
-                this.indexHeader.setEndTimestamp(storeTimestamp);
+				int absIndexPos = IndexHeader.INDEX_HEADER_SIZE + this.hashSlotNum * hashSlotSize
+						+ this.indexHeader.getIndexCount() * indexSize;
 
-                return true;
-            } catch (Exception e) {
-                log.error("putKey exception, Key: " + key + " KeyHashCode: " + key.hashCode(), e);
-            } finally {
-                if (fileLock != null) {
-                    try {
-                        fileLock.release();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-        } else {
-            log.warn("Over index file capacity: index count = " + this.indexHeader.getIndexCount()
-                + "; index max num = " + this.indexNum);
-        }
+				this.mappedByteBuffer.putInt(absIndexPos, keyHash);
+				this.mappedByteBuffer.putLong(absIndexPos + 4, phyOffset);
+				this.mappedByteBuffer.putInt(absIndexPos + 4 + 8, (int) timeDiff);
+				this.mappedByteBuffer.putInt(absIndexPos + 4 + 8 + 4, slotValue);
 
-        return false;
-    }
+				this.mappedByteBuffer.putInt(absSlotPos, this.indexHeader.getIndexCount());
 
-    public int indexKeyHashMethod(final String key) {
-        int keyHash = key.hashCode();
-        int keyHashPositive = Math.abs(keyHash);
-        if (keyHashPositive < 0)
-            keyHashPositive = 0;
-        return keyHashPositive;
-    }
+				if (this.indexHeader.getIndexCount() <= 1) {
+					this.indexHeader.setBeginPhyOffset(phyOffset);
+					this.indexHeader.setBeginTimestamp(storeTimestamp);
+				}
 
-    public long getBeginTimestamp() {
-        return this.indexHeader.getBeginTimestamp();
-    }
+				this.indexHeader.incHashSlotCount();
+				this.indexHeader.incIndexCount();
+				this.indexHeader.setEndPhyOffset(phyOffset);
+				this.indexHeader.setEndTimestamp(storeTimestamp);
 
-    public long getEndTimestamp() {
-        return this.indexHeader.getEndTimestamp();
-    }
+				return true;
+			} catch (Exception e) {
+				log.error("putKey exception, Key: " + key + " KeyHashCode: " + key.hashCode(), e);
+			} finally {
+				if (fileLock != null) {
+					try {
+						fileLock.release();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		} else {
+			log.warn("Over index file capacity: index count = " + this.indexHeader.getIndexCount()
+					+ "; index max num = " + this.indexNum);
+		}
 
-    public long getEndPhyOffset() {
-        return this.indexHeader.getEndPhyOffset();
-    }
+		return false;
+	}
 
-    public boolean isTimeMatched(final long begin, final long end) {
-        boolean result = begin < this.indexHeader.getBeginTimestamp() && end > this.indexHeader.getEndTimestamp();
-        result = result || (begin >= this.indexHeader.getBeginTimestamp() && begin <= this.indexHeader.getEndTimestamp());
-        result = result || (end >= this.indexHeader.getBeginTimestamp() && end <= this.indexHeader.getEndTimestamp());
-        return result;
-    }
+	/**
+	 * 获取key的hash值(int)，转成绝对值
+	 * 
+	 * @param key
+	 * @return
+	 */
+	public int indexKeyHashMethod(final String key) {
+		int keyHash = key.hashCode();
+		int keyHashPositive = Math.abs(keyHash);
+		if (keyHashPositive < 0)
+			keyHashPositive = 0;
+		return keyHashPositive;
+	}
 
-    public void selectPhyOffset(final List<Long> phyOffsets, final String key, final int maxNum,
-        final long begin, final long end, boolean lock) {
-        if (this.mappedFile.hold()) {
-            int keyHash = indexKeyHashMethod(key);
-            int slotPos = keyHash % this.hashSlotNum;
-            int absSlotPos = IndexHeader.INDEX_HEADER_SIZE + slotPos * hashSlotSize;
+	public long getBeginTimestamp() {
+		return this.indexHeader.getBeginTimestamp();
+	}
 
-            FileLock fileLock = null;
-            try {
-                if (lock) {
-                    // fileLock = this.fileChannel.lock(absSlotPos,
-                    // hashSlotSize, true);
-                }
+	public long getEndTimestamp() {
+		return this.indexHeader.getEndTimestamp();
+	}
 
-                int slotValue = this.mappedByteBuffer.getInt(absSlotPos);
-                // if (fileLock != null) {
-                // fileLock.release();
-                // fileLock = null;
-                // }
+	public long getEndPhyOffset() {
+		return this.indexHeader.getEndPhyOffset();
+	}
 
-                if (slotValue <= invalidIndex || slotValue > this.indexHeader.getIndexCount()
-                    || this.indexHeader.getIndexCount() <= 1) {
-                    // TODO NOTFOUND
-                } else {
-                    for (int nextIndexToRead = slotValue;;) {
-                        if (phyOffsets.size() >= maxNum) {
-                            break;
-                        }
+	/**
+	 * 
+	 * [begin,end]时间与 [indexHeader.getBeginTimestamp(),
+	 * this.indexHeader.getEndTimestamp()]时间有重叠
+	 * 
+	 * @param begin
+	 * @param end
+	 * @return
+	 */
+	public boolean isTimeMatched(final long begin, final long end) {
+		boolean result = begin < this.indexHeader.getBeginTimestamp() && end > this.indexHeader.getEndTimestamp();
+		result = result
+				|| (begin >= this.indexHeader.getBeginTimestamp() && begin <= this.indexHeader.getEndTimestamp());
+		result = result || (end >= this.indexHeader.getBeginTimestamp() && end <= this.indexHeader.getEndTimestamp());
+		return result;
+	}
 
-                        int absIndexPos =
-                            IndexHeader.INDEX_HEADER_SIZE + this.hashSlotNum * hashSlotSize
-                                + nextIndexToRead * indexSize;
+	/**
+	 * 根据key找到slot对应的整个列表，找到keyHash一样且存储时间在给定的[begin,end]范围内的索引列表（最多maxNum条，从新到旧），
+	 * 返回他们的物理偏移
+	 *
+	 * @param phyOffsets
+	 *            物理偏移列表,用于返回
+	 * @param key
+	 *            关键字
+	 * @param maxNum
+	 *            phyOffsets最多保存这么多条记录就返回
+	 * @param begin
+	 *            开始时间戳
+	 * @param end
+	 *            结束时间戳
+	 * @param lock:没有用
+	 */
+	public void selectPhyOffset(final List<Long> phyOffsets, final String key, final int maxNum, final long begin,
+			final long end, boolean lock) {
+		if (this.mappedFile.hold()) {
+			int keyHash = indexKeyHashMethod(key);
+			int slotPos = keyHash % this.hashSlotNum;
+			int absSlotPos = IndexHeader.INDEX_HEADER_SIZE + slotPos * hashSlotSize;
 
-                        int keyHashRead = this.mappedByteBuffer.getInt(absIndexPos);
-                        long phyOffsetRead = this.mappedByteBuffer.getLong(absIndexPos + 4);
+			FileLock fileLock = null;
+			try {
+				if (lock) {
+					// fileLock = this.fileChannel.lock(absSlotPos,
+					// hashSlotSize, true);
+				}
 
-                        long timeDiff = (long) this.mappedByteBuffer.getInt(absIndexPos + 4 + 8);
-                        int prevIndexRead = this.mappedByteBuffer.getInt(absIndexPos + 4 + 8 + 4);
+				int slotValue = this.mappedByteBuffer.getInt(absSlotPos);
+				// if (fileLock != null) {
+				// fileLock.release();
+				// fileLock = null;
+				// }
 
-                        if (timeDiff < 0) {
-                            break;
-                        }
+				if (slotValue <= invalidIndex || slotValue > this.indexHeader.getIndexCount()
+						|| this.indexHeader.getIndexCount() <= 1) {
+					// TODO NOTFOUND
+				} else {
+					for (int nextIndexToRead = slotValue;;) {
+						if (phyOffsets.size() >= maxNum) {
+							break;
+						}
 
-                        timeDiff *= 1000L;
+						int absIndexPos = IndexHeader.INDEX_HEADER_SIZE + this.hashSlotNum * hashSlotSize
+								+ nextIndexToRead * indexSize;
 
-                        long timeRead = this.indexHeader.getBeginTimestamp() + timeDiff;
-                        boolean timeMatched = (timeRead >= begin) && (timeRead <= end);
+						int keyHashRead = this.mappedByteBuffer.getInt(absIndexPos);
+						long phyOffsetRead = this.mappedByteBuffer.getLong(absIndexPos + 4);
 
-                        if (keyHash == keyHashRead && timeMatched) {
-                            phyOffsets.add(phyOffsetRead);
-                        }
+						long timeDiff = (long) this.mappedByteBuffer.getInt(absIndexPos + 4 + 8);
+						int prevIndexRead = this.mappedByteBuffer.getInt(absIndexPos + 4 + 8 + 4);
 
-                        if (prevIndexRead <= invalidIndex
-                            || prevIndexRead > this.indexHeader.getIndexCount()
-                            || prevIndexRead == nextIndexToRead || timeRead < begin) {
-                            break;
-                        }
+						if (timeDiff < 0) {
+							break;
+						}
 
-                        nextIndexToRead = prevIndexRead;
-                    }
-                }
-            } catch (Exception e) {
-                log.error("selectPhyOffset exception ", e);
-            } finally {
-                if (fileLock != null) {
-                    try {
-                        fileLock.release();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
+						timeDiff *= 1000L;
 
-                this.mappedFile.release();
-            }
-        }
-    }
+						long timeRead = this.indexHeader.getBeginTimestamp() + timeDiff;
+						boolean timeMatched = (timeRead >= begin) && (timeRead <= end);
+
+						if (keyHash == keyHashRead && timeMatched) {
+							phyOffsets.add(phyOffsetRead);
+						}
+
+						if (prevIndexRead <= invalidIndex || prevIndexRead > this.indexHeader.getIndexCount()
+								|| prevIndexRead == nextIndexToRead || timeRead < begin) {
+							break;
+						}
+
+						nextIndexToRead = prevIndexRead;
+					}
+				}
+			} catch (Exception e) {
+				log.error("selectPhyOffset exception ", e);
+			} finally {
+				if (fileLock != null) {
+					try {
+						fileLock.release();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+
+				this.mappedFile.release();
+			}
+		}
+	}
 }
